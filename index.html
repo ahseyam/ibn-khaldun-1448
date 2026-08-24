@@ -42,15 +42,26 @@
     ولا يُحفظ في هذا الموقع شيء عنك.</div>
 </div>
 <script>
-const SALT=Uint8Array.from(atob("qIdqCpzhjFsDSnvSL+U2Tg=="),c=>c.charCodeAt(0));
+const SALT=Uint8Array.from(atob("wK/XBZKy4jZIvuBq/6abVg=="),c=>c.charCodeAt(0));
 const ITER=310000;
 const m=document.getElementById('m'), b=document.getElementById('b'),
       bar=document.getElementById('bar'), fill=bar.querySelector('i');
 const say=(t,k)=>{m.textContent=t;m.className='m'+(k?' '+k:'')};
+const WRAPPED=true;
 async function keyFrom(pw){
   const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:SALT,iterations:ITER,hash:'SHA-256'},base,256);
-  return new Uint8Array(bits);
+  const kw=new Uint8Array(bits);
+  /* المفتاح الرئيس مُغلَّف: يُفكّ غلافه بمفتاح كلمة الدخول، ثم يُفكّ به المحتوى.
+     فتبديل الكلمة لا يمسّ المحتوى — يُعاد كتابة الغلاف وحده (٦٠ بايت). */
+  const wr=await fetch('wrap.bin',{cache:'no-store'});
+  if(!wr.ok) throw new Error('تعذّر تنزيل الغلاف');
+  const wb=await wr.arrayBuffer();
+  const k=await crypto.subtle.importKey('raw',kw,'AES-GCM',false,['decrypt']);
+  try{
+    return new Uint8Array(await crypto.subtle.decrypt(
+      {name:'AES-GCM',iv:new Uint8Array(wb,0,12)},k,new Uint8Array(wb,12)));
+  }catch(e){ throw new Error('BAD_PASS'); }
 }
 async function open_(raw,buf){
   const k=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
