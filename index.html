@@ -42,7 +42,7 @@
     ولا يُحفظ في هذا الموقع شيء عنك.</div>
 </div>
 <script>
-const SALT=Uint8Array.from(atob("UI8sBzFLyJsXDDc4pKR18w=="),c=>c.charCodeAt(0));
+const SALT=Uint8Array.from(atob("qIdqCpzhjFsDSnvSL+U2Tg=="),c=>c.charCodeAt(0));
 const ITER=310000;
 const m=document.getElementById('m'), b=document.getElementById('b'),
       bar=document.getElementById('bar'), fill=bar.querySelector('i');
@@ -65,13 +65,21 @@ document.getElementById('f').addEventListener('submit',async e=>{
   try{
     const raw=await keyFrom(pw);
     fill.style.width='42%'; say('يُنزَّل المحتوى…');
-    const res=await fetch('app.enc',{cache:'no-store'});
+    const gzOK = ('DecompressionStream' in window);
+    const res=await fetch(gzOK?'app.enc':'app.full.enc',{cache:'no-store'});
     if(!res.ok) throw new Error('تعذّر تنزيل المحتوى');
     const buf=await res.arrayBuffer();
     fill.style.width='72%'; say('يُفكّ التعمية…');
     let html;
-    try{ html=new TextDecoder().decode(await open_(raw,buf)); }
-    catch(err){ throw new Error('BAD_PASS'); }
+    try{
+      let bytes=await open_(raw,buf);
+      if(gzOK){
+        const ds=new DecompressionStream('gzip');
+        const st=new Blob([bytes]).stream().pipeThrough(ds);
+        bytes=new Uint8Array(await new Response(st).arrayBuffer());
+      }
+      html=new TextDecoder().decode(bytes);
+    }catch(err){ throw new Error('BAD_PASS'); }
     fill.style.width='88%'; say('يُجهَّز عارض الحقائب…');
     if('serviceWorker' in navigator){
       try{
