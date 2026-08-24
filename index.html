@@ -80,22 +80,11 @@ document.getElementById('f').addEventListener('submit',async e=>{
       }
       html=new TextDecoder().decode(bytes);
     }catch(err){ throw new Error('BAD_PASS'); }
-    fill.style.width='88%'; say('يُجهَّز عارض الحقائب…');
-    if('serviceWorker' in navigator){
-      try{
-        const reg=await navigator.serviceWorker.register('sw.js',{scope:'./'});
-        await navigator.serviceWorker.ready;
-        /* المفتاح يُسلَّم لعامل الخدمة في الذاكرة فقط — ولا يُكتب على القرص.
-           وإذا أُوقف العامل وأُعيد تشغيله طلبه من الصفحة فتُعيد إرساله. */
-        const send=()=>{const c=navigator.serviceWorker.controller||reg.active;
-          if(c) c.postMessage({key:raw},[]);};
-        navigator.serviceWorker.addEventListener('message',ev=>{
-          if(ev.data&&ev.data.need==='key') send(); });
-        send();
-        await new Promise(r=>setTimeout(r,120));
-      }catch(err){ /* بلا عامل خدمة تعمل المنصّة كاملةً عدا عرض ملفات الحقائب */ }
-    }
-    fill.style.width='100%'; say('تمّ الدخول ✔','ok');
+    fill.style.width='95%'; say('تمّ الدخول ✔','ok');
+    /* المفتاح يبقى في ذاكرة النافذة وحدها — لا قرص ولا تخزين ولا إرسال.
+       و`document.write` لا يُنشئ نافذةً جديدة، فالمتغيّر يبقى للصفحة بعده. */
+    window.__IKKEY = raw;
+    fill.style.width='100%';
     document.open(); document.write(html); document.close();
   }catch(err){
     b.disabled=false; bar.style.display='none'; fill.style.width='0';
