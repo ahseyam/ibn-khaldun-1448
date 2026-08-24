@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>خطة تدريس حقائب النشاط الصفّي — مدارس ابن خلدون معارف</title>
+<style>
+ :root{ --ink:#0D2B50; --ink2:#1B4A85; --paper:#FBFAF7; --line:#C9C3B6; --muted:#5C5648 }
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--paper);
+  color:#1C1A15;font-family:"SF Arabic","Geeza Pro",Tahoma,Arial,sans-serif;padding:24px}
+ .c{background:#fff;border-radius:14px;padding:34px 38px;max-width:460px;width:100%;
+  box-shadow:0 0 0 1px rgba(33,31,28,.07),0 2px 14px rgba(33,31,28,.08)}
+ h1{font-size:19px;margin:0 0 4px;color:var(--ink);line-height:1.5}
+ .s{font-size:13px;color:var(--muted);margin:0 0 20px}
+ label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+ input{width:100%;font:inherit;font-size:16px;padding:11px 13px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;text-align:center;letter-spacing:.18em}
+ input:focus{outline:2px solid var(--ink2);outline-offset:1px;border-color:transparent}
+ button{width:100%;margin-top:14px;font:inherit;font-weight:700;font-size:14px;
+  padding:11px;border:0;border-radius:9px;background:var(--ink2);color:#fff;cursor:pointer}
+ button:disabled{opacity:.55;cursor:progress}
+ .m{margin-top:14px;font-size:13px;line-height:1.8;min-height:22px}
+ .m.err{color:#A32218} .m.ok{color:#116B4A}
+ .n{margin-top:20px;padding-top:14px;border-top:1px solid #EEEBE4;font-size:11.5px;
+  color:#948C7C;line-height:1.85}
+ .bar{height:4px;border-radius:99px;background:#EEEBE4;overflow:hidden;margin-top:12px;display:none}
+ .bar i{display:block;height:100%;width:0;background:var(--ink2);transition:width .2s}
+</style></head><body>
+<div class="c">
+  <h1>خطة تدريس حقائب النشاط الصفّي</h1>
+  <p class="s">مدارس ابن خلدون — معارف · ١٤٤٨هـ</p>
+  <form id="f">
+    <label for="p">كلمة الدخول</label>
+    <input id="p" type="password" inputmode="numeric" autocomplete="current-password"
+           autofocus aria-describedby="m">
+    <button id="b" type="submit">دخول</button>
+  </form>
+  <div class="bar" id="bar"><i></i></div>
+  <div class="m" id="m" role="status" aria-live="polite"></div>
+  <div class="n">محتوى هذه المنصّة <b>مُعمّى على الخادم</b>: لا يُقرأ منه شيء بلا كلمة
+    الدخول، ولا تُرسَل كلمتُك إلى أي جهة — يُشتقّ منها المفتاح في متصفّحك وحده.
+    ولا يُحفظ في هذا الموقع شيء عنك.</div>
+</div>
+<script>
+const SALT=Uint8Array.from(atob("UI8sBzFLyJsXDDc4pKR18w=="),c=>c.charCodeAt(0));
+const ITER=310000;
+const m=document.getElementById('m'), b=document.getElementById('b'),
+      bar=document.getElementById('bar'), fill=bar.querySelector('i');
+const say=(t,k)=>{m.textContent=t;m.className='m'+(k?' '+k:'')};
+async function keyFrom(pw){
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:SALT,iterations:ITER,hash:'SHA-256'},base,256);
+  return new Uint8Array(bits);
+}
+async function open_(raw,buf){
+  const k=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
+  return new Uint8Array(await crypto.subtle.decrypt(
+    {name:'AES-GCM',iv:new Uint8Array(buf,0,12)},k,new Uint8Array(buf,12)));
+}
+document.getElementById('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const pw=document.getElementById('p').value;
+  if(!pw){ say('اكتب كلمة الدخول.','err'); return; }
+  b.disabled=true; say('يُشتقّ المفتاح…'); bar.style.display='block'; fill.style.width='18%';
+  try{
+    const raw=await keyFrom(pw);
+    fill.style.width='42%'; say('يُنزَّل المحتوى…');
+    const res=await fetch('app.enc',{cache:'no-store'});
+    if(!res.ok) throw new Error('تعذّر تنزيل المحتوى');
+    const buf=await res.arrayBuffer();
+    fill.style.width='72%'; say('يُفكّ التعمية…');
+    let html;
+    try{ html=new TextDecoder().decode(await open_(raw,buf)); }
+    catch(err){ throw new Error('BAD_PASS'); }
+    fill.style.width='88%'; say('يُجهَّز عارض الحقائب…');
+    if('serviceWorker' in navigator){
+      try{
+        const reg=await navigator.serviceWorker.register('sw.js',{scope:'./'});
+        await navigator.serviceWorker.ready;
+        /* المفتاح يُسلَّم لعامل الخدمة في الذاكرة فقط — ولا يُكتب على القرص.
+           وإذا أُوقف العامل وأُعيد تشغيله طلبه من الصفحة فتُعيد إرساله. */
+        const send=()=>{const c=navigator.serviceWorker.controller||reg.active;
+          if(c) c.postMessage({key:raw},[]);};
+        navigator.serviceWorker.addEventListener('message',ev=>{
+          if(ev.data&&ev.data.need==='key') send(); });
+        send();
+        await new Promise(r=>setTimeout(r,120));
+      }catch(err){ /* بلا عامل خدمة تعمل المنصّة كاملةً عدا عرض ملفات الحقائب */ }
+    }
+    fill.style.width='100%'; say('تمّ الدخول ✔','ok');
+    document.open(); document.write(html); document.close();
+  }catch(err){
+    b.disabled=false; bar.style.display='none'; fill.style.width='0';
+    say(err.message==='BAD_PASS'
+      ? 'كلمة الدخول غير صحيحة.'
+      : 'تعذّر الدخول: '+err.message, 'err');
+  }
+});
+</script></body></html>
