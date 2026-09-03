@@ -64,16 +64,43 @@ async function open_(raw,buf){
    والعلاج: يُحفَظ المفتاح في `sessionStorage` — وهو **مقصورٌ على التبويب**
    ويزول بإغلاقه، فلا يبقى على الجهاز بعد انصراف المستخدم. وهو موازنةٌ
    مقبولة: من يبلغ sessionStorage يكون المحتوى مفكوكاً أمامه أصلاً. */
+/* الأرقام عربية في كل ما يُعرَض — قاعدة المشروع */
+const AR = t => String(t).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
 const KEY_SS='ik_k';
 const b64 = u => btoa(String.fromCharCode(...u));
 const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
 
+/* ⚠️ الانتظار الأعمى: قِيس الدخول على جوّالٍ متوسّط وشبكة ١٫٥ ميغابت فكان
+   ١٧٫٥ ثانية — منها ١٫٢ للمفتاح والفكّ و٢٫٣ لبناء الصفحة، **والباقي تنزيلٌ
+   خالص**. ومن يقف أمام شريطٍ لا يتحرّك يحسب الصفحة معطّلة فيُغلقها. فالشريط
+   الآن يتبع **البايتات الواصلة** لا مراحل مقدَّرة، ويقول كم نزل من كم. */
 async function boot(raw, fromCache){
-  fill.style.width='42%'; say(fromCache?'يُستأنف…':'يُنزَّل المحتوى…');
+  fill.style.width='12%'; say(fromCache?'يُستأنف…':'يُنزَّل المحتوى…');
   const gzOK = ('DecompressionStream' in window);
   const res=await fetch(gzOK?'app.enc':'app.full.enc',{cache:'no-store'});
   if(!res.ok) throw new Error('تعذّر تنزيل المحتوى');
-  const buf=await res.arrayBuffer();
+  const total = +(res.headers.get('content-length')||0);
+  let buf;
+  if(res.body && res.body.getReader){
+    const rd=res.body.getReader(); const parts=[]; let got=0, tick=0;
+    const MB = n => (n/1048576).toFixed(1);
+    for(;;){
+      const {done,value}=await rd.read(); if(done) break;
+      parts.push(value); got+=value.length;
+      if(Date.now()-tick > 120){        // لا نُرهق الرسم بكل قطعة
+        tick=Date.now();
+        const pc = total ? got/total : 0;
+        fill.style.width = (12 + Math.round(pc*58)) + '%';
+        say(total ? `يُنزَّل المحتوى… ${AR(MB(got))} من ${AR(MB(total))} ميجابايت`
+                  : `يُنزَّل المحتوى… ${AR(MB(got))} ميجابايت`);
+      }
+    }
+    buf=new Uint8Array(got); let o=0;
+    for(const q of parts){ buf.set(q,o); o+=q.length; }
+    buf=buf.buffer;
+  } else {
+    buf=await res.arrayBuffer();
+  }
   fill.style.width='72%'; say('يُفكّ التعمية…');
   let bytes=await open_(raw,buf);
   if(gzOK){
@@ -89,6 +116,7 @@ function mount(html, raw){
      نافذةً جديدة فيبقى المتغيّر. */
   if(raw) window.__IKKEY = raw;
   fill.style.width='100%';
+  say('تُبنى الصفحة…','ok');
   document.open(); document.write(html); document.close();
 }
 
