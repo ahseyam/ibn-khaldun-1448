@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>خطة تدريس حقائب النشاط الصفّي — مدارس ابن خلدون معارف</title>
+<title>مِرآة النشاط الطلابي — مدارس ابن خلدون معارف</title>
 <style>
  :root{ --ink:#0D2B50; --ink2:#1B4A85; --paper:#FBFAF7; --line:#C9C3B6; --muted:#5C5648 }
  *{box-sizing:border-box}
@@ -47,27 +47,67 @@ const ITER=310000;
 const m=document.getElementById('m'), b=document.getElementById('b'),
       bar=document.getElementById('bar'), fill=bar.querySelector('i');
 const say=(t,k)=>{m.textContent=t;m.className='m'+(k?' '+k:'')};
-const WRAPPED=true;
 async function keyFrom(pw){
   const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:SALT,iterations:ITER,hash:'SHA-256'},base,256);
-  const kw=new Uint8Array(bits);
-  /* المفتاح الرئيس مُغلَّف: يُفكّ غلافه بمفتاح كلمة الدخول، ثم يُفكّ به المحتوى.
-     فتبديل الكلمة لا يمسّ المحتوى — يُعاد كتابة الغلاف وحده (٦٠ بايت). */
-  const wr=await fetch('wrap.bin',{cache:'no-store'});
-  if(!wr.ok) throw new Error('تعذّر تنزيل الغلاف');
-  const wb=await wr.arrayBuffer();
-  const k=await crypto.subtle.importKey('raw',kw,'AES-GCM',false,['decrypt']);
-  try{
-    return new Uint8Array(await crypto.subtle.decrypt(
-      {name:'AES-GCM',iv:new Uint8Array(wb,0,12)},k,new Uint8Array(wb,12)));
-  }catch(e){ throw new Error('BAD_PASS'); }
+  return new Uint8Array(bits);
 }
 async function open_(raw,buf){
   const k=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
   return new Uint8Array(await crypto.subtle.decrypt(
     {name:'AES-GCM',iv:new Uint8Array(buf,0,12)},k,new Uint8Array(buf,12)));
 }
+/* ⚠️ **عطلٌ رصده المستشار**: كل تحديثٍ للصفحة يُخرجه إلى بوّابة الدخول
+   ويُضيع موضعه. والسبب أن المفتاح لا يُحفَظ في أي مكان، فيُشتقّ من الصفر
+   في كل تحميل — وPBKDF2 ثلاثمئة وعشرة آلاف دورة، فالكلفة ليست الكتابة
+   وحدها بل الانتظار أيضاً.
+   والعلاج: يُحفَظ المفتاح في `sessionStorage` — وهو **مقصورٌ على التبويب**
+   ويزول بإغلاقه، فلا يبقى على الجهاز بعد انصراف المستخدم. وهو موازنةٌ
+   مقبولة: من يبلغ sessionStorage يكون المحتوى مفكوكاً أمامه أصلاً. */
+const KEY_SS='ik_k';
+const b64 = u => btoa(String.fromCharCode(...u));
+const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+
+async function boot(raw, fromCache){
+  fill.style.width='42%'; say(fromCache?'يُستأنف…':'يُنزَّل المحتوى…');
+  const gzOK = ('DecompressionStream' in window);
+  const res=await fetch(gzOK?'app.enc':'app.full.enc',{cache:'no-store'});
+  if(!res.ok) throw new Error('تعذّر تنزيل المحتوى');
+  const buf=await res.arrayBuffer();
+  fill.style.width='72%'; say('يُفكّ التعمية…');
+  let bytes=await open_(raw,buf);
+  if(gzOK){
+    bytes=new Uint8Array(await new Response(
+      new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function mount(html, raw){
+  fill.style.width='95%'; say('تمّ الدخول ✔','ok');
+  /* المفتاح يبقى في ذاكرة النافذة للعامل، و`document.write` لا يُنشئ
+     نافذةً جديدة فيبقى المتغيّر. */
+  if(raw) window.__IKKEY = raw;
+  fill.style.width='100%';
+  document.open(); document.write(html); document.close();
+}
+
+/* استئنافٌ صامت: إن كان المفتاح في هذه الجلسة فلا تُسأل كلمةُ السرّ */
+(async()=>{
+  let cached=null;
+  try{ cached=sessionStorage.getItem(KEY_SS) }catch(e){}
+  if(!cached) return;
+  try{
+    bar.style.display='block'; fill.style.width='30%';
+    const k=unb64(cached);
+    const html=await boot(k, true);
+    mount(html, k);
+  }catch(e){
+    try{ sessionStorage.removeItem(KEY_SS) }catch(_){}
+    bar.style.display='none'; say('');
+  }
+})();
+
 document.getElementById('f').addEventListener('submit',async e=>{
   e.preventDefault();
   const pw=document.getElementById('p').value;
@@ -75,29 +115,14 @@ document.getElementById('f').addEventListener('submit',async e=>{
   b.disabled=true; say('يُشتقّ المفتاح…'); bar.style.display='block'; fill.style.width='18%';
   try{
     const raw=await keyFrom(pw);
-    fill.style.width='42%'; say('يُنزَّل المحتوى…');
-    const gzOK = ('DecompressionStream' in window);
-    const res=await fetch(gzOK?'app.enc':'app.full.enc',{cache:'no-store'});
-    if(!res.ok) throw new Error('تعذّر تنزيل المحتوى');
-    const buf=await res.arrayBuffer();
-    fill.style.width='72%'; say('يُفكّ التعمية…');
     let html;
-    try{
-      let bytes=await open_(raw,buf);
-      if(gzOK){
-        const ds=new DecompressionStream('gzip');
-        const st=new Blob([bytes]).stream().pipeThrough(ds);
-        bytes=new Uint8Array(await new Response(st).arrayBuffer());
-      }
-      html=new TextDecoder().decode(bytes);
-    }catch(err){ throw new Error('BAD_PASS'); }
-    fill.style.width='95%'; say('تمّ الدخول ✔','ok');
-    /* المفتاح يبقى في ذاكرة النافذة وحدها — لا قرص ولا تخزين ولا إرسال.
-       و`document.write` لا يُنشئ نافذةً جديدة، فالمتغيّر يبقى للصفحة بعده. */
-    window.__IKKEY = raw;
-    fill.style.width='100%';
-    document.open(); document.write(html); document.close();
+    try{ html=await boot(raw,false); }
+    catch(err){ throw new Error('BAD_PASS'); }
+    /* المفتاح يُحفَظ **بعد** ثبوت صحّته لا قبله — فلا تُخزَّن كلمةٌ خاطئة */
+    try{ sessionStorage.setItem(KEY_SS, b64(raw)) }catch(_){}
+    mount(html, raw);
   }catch(err){
+    try{ sessionStorage.removeItem(KEY_SS) }catch(_){}
     b.disabled=false; bar.style.display='none'; fill.style.width='0';
     say(err.message==='BAD_PASS'
       ? 'كلمة الدخول غير صحيحة.'
