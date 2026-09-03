@@ -66,6 +66,12 @@ async function open_(raw,buf){
    مقبولة: من يبلغ sessionStorage يكون المحتوى مفكوكاً أمامه أصلاً. */
 /* الأرقام عربية في كل ما يُعرَض — قاعدة المشروع */
 const AR = t => String(t).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
+/* تسجيل عامل الخدمة: يخزّن البوّابة والمنصّة فتُفتح بعد قطع الشبكة.
+   ⚠️ يفشل صامتاً على file:// وفي التصفّح الخاص — وهذا مقبول: غيابه
+   يعيد السلوك القديم ولا يكسر شيئاً. */
+if ('serviceWorker' in navigator) {
+  try { navigator.serviceWorker.register('sw.js'); } catch (e) {}
+}
 const KEY_SS='ik_k';
 const b64 = u => btoa(String.fromCharCode(...u));
 const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
