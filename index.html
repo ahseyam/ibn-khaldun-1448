@@ -129,8 +129,13 @@ async function boot(raw, fromCache){
   return new TextDecoder().decode(bytes);
 }
 
-function mount(html, raw){
+function mount(html, raw, fresh){
   fill.style.width='95%'; say('تمّ الدخول ✔','ok');
+  /* قرار المستشار (٢٠٢٦-٠٩-٢٢): «عند إدخال كلمة السرّ تظهر المرآة». والفرق بين
+     دخولٍ بكلمة سرٍّ الآن واستئنافِ جلسةٍ بعد تحديث الصفحة لا تعرفه إلا البوّابة
+     — فتُبلغ المنصّة به، فتهبط على المرآة بعد الدخول وحده ولا يفقد من حدّث
+     الصفحة موضعه. */
+  window.__ikFreshLogin = !!fresh;
   /* المفتاح يبقى في ذاكرة النافذة للعامل، و`document.write` لا يُنشئ
      نافذةً جديدة فيبقى المتغيّر. */
   if(raw) window.__IKKEY = raw;
@@ -167,7 +172,7 @@ document.getElementById('f').addEventListener('submit',async e=>{
     catch(err){ throw new Error('BAD_PASS'); }
     /* المفتاح يُحفَظ **بعد** ثبوت صحّته لا قبله — فلا تُخزَّن كلمةٌ خاطئة */
     try{ sessionStorage.setItem(KEY_SS, b64(raw)) }catch(_){}
-    mount(html, raw);
+    mount(html, raw, true);
   }catch(err){
     try{ sessionStorage.removeItem(KEY_SS) }catch(_){}
     b.disabled=false; bar.style.display='none'; fill.style.width='0';
